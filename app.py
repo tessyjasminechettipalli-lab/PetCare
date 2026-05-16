@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 import os
 from datetime import date
+
 st.set_page_config(
     page_title="Pet Care Reminder System",
     page_icon="🐾",
@@ -124,9 +125,6 @@ img {
 
 </style>
 """, unsafe_allow_html=True)
-import sqlite3
-import pandas as pd
-import os
 
 # DATABASE CONNECTION
 conn = sqlite3.connect('petcare.db', check_same_thread=False)
@@ -173,211 +171,141 @@ choice = st.sidebar.selectbox("Menu", menu)
 
 # DASHBOARD
 if choice == "Dashboard":
-
     st.subheader("Dashboard")
-
     pet_count = c.execute("SELECT COUNT(*) FROM pets").fetchone()[0]
     reminder_count = c.execute("SELECT COUNT(*) FROM reminders").fetchone()[0]
 
     col1, col2 = st.columns(2)
-
     col1.metric("Total Pets", pet_count)
     col2.metric("Total Reminders", reminder_count)
 
 # ADD PET
 elif choice == "Add Pet":
-
     st.subheader("Add New Pet")
-
     name = st.text_input("Pet Name")
     pet_type = st.text_input("Pet Type")
     age = st.number_input("Pet Age", 0, 50)
     owner = st.text_input("Owner Name")
-
-    photo = st.file_uploader(
-        "Upload Pet Photo",
-        type=["jpg", "png", "jpeg"]
-    )
+    photo = st.file_uploader("Upload Pet Photo", type=["jpg", "png", "jpeg"])
 
     if st.button("Save Pet"):
-
         photo_path = ""
-
         if photo is not None:
-
             if not os.path.exists("photos"):
                 os.makedirs("photos")
-
             photo_path = f"photos/{photo.name}"
-
             with open(photo_path, "wb") as f:
                 f.write(photo.getbuffer())
 
-        c.execute(
-            '''
+        c.execute('''
             INSERT INTO pets(name, type, age, owner, photo)
             VALUES (?, ?, ?, ?, ?)
-            ''',
-            (name, pet_type, age, owner, photo_path)
-        )
-
+            ''', (name, pet_type, age, owner, photo_path))
         conn.commit()
-
         st.success("Pet Added Successfully!")
 
 # VIEW PETS
 elif choice == "View Pets":
-
     st.subheader("All Pets")
-
     data = pd.read_sql_query("SELECT * FROM pets", conn)
 
     if data.empty:
         st.warning("No pets added yet.")
-
-    for index, row in data.iterrows():
-
-        st.write(f"### 🐶 {row['name']}")
-        st.write(f"Type: {row['type']}")
-        st.write(f"Age: {row['age']}")
-        st.write(f"Owner: {row['owner']}")
-
-        if row['photo'] != "":
-            st.image(row['photo'], width=200)
-
-        st.write("---")
+    else:
+        for index, row in data.iterrows():
+            st.write(f"### 🐶 {row['name']}")
+            st.write(f"Type: {row['type']}")
+            st.write(f"Age: {row['age']}")
+            st.write(f"Owner: {row['owner']}")
+            if row['photo'] != "":
+                st.image(row['photo'], width=200)
+            st.write("---")
 
 # SEARCH PET
 elif choice == "Search Pet":
-
     st.subheader("Search Pet")
-
     search_name = st.text_input("Enter Pet Name")
 
     if st.button("Search"):
-
-        query = '''
-        SELECT * FROM pets
-        WHERE name LIKE ?
-        '''
-
-        result = pd.read_sql_query(
-            query,
-            conn,
-            params=(f"%{search_name}%",)
-        )
+        query = 'SELECT * FROM pets WHERE name LIKE ?'
+        result = pd.read_sql_query(query, conn, params=(f"%{search_name}%",))
 
         if result.empty:
             st.error("No pet found.")
-
         else:
-
             for index, row in result.iterrows():
-
                 st.write(f"### 🐾 {row['name']}")
                 st.write(f"Type: {row['type']}")
                 st.write(f"Age: {row['age']}")
                 st.write(f"Owner: {row['owner']}")
-
                 if row['photo'] != "":
                     st.image(row['photo'], width=200)
 
 # DELETE PET
 elif choice == "Delete Pet":
-
     st.subheader("Delete Pet")
-
-    pets = pd.read_sql_query(
-        "SELECT name FROM pets",
-        conn
-    )
-
+    pets = pd.read_sql_query("SELECT name FROM pets", conn)
     pet_names = pets['name'].tolist()
 
-    selected_pet = st.selectbox(
-        "Select Pet",
-        pet_names
-    )
+    selected_pet = st.selectbox("Select Pet", pet_names)
 
     if st.button("Delete"):
-
-        c.execute(
-            "DELETE FROM pets WHERE name = ?",
-            (selected_pet,)
-        )
-
+        c.execute("DELETE FROM pets WHERE name = ?", (selected_pet,))
         conn.commit()
-
         st.success("Pet Deleted Successfully!")
+        st.rerun()
 
 # ADD REMINDER
 elif choice == "Add Reminder":
-
     st.subheader("Add Reminder")
-
     pet_name = st.text_input("Pet Name")
-
-    reminder_type = st.selectbox(
-        "Reminder Type",
-        [
-            "Feeding",
-            "Vaccination",
-            "Vet Visit",
-            "Medicine"
-        ]
-    )
-
+    reminder_type = st.selectbox("Reminder Type", ["Feeding", "Vaccination", "Vet Visit", "Medicine"])
     reminder_date = st.date_input("Reminder Date")
 
     if st.button("Save Reminder"):
-
-        c.execute(
-            '''
-            INSERT INTO reminders(
-                pet_name,
-                reminder_type,
-                reminder_date
-            )
+        c.execute('''
+            INSERT INTO reminders(pet_name, reminder_type, reminder_date)
             VALUES (?, ?, ?)
-            ''',
-            (
-                pet_name,
-                reminder_type,
-                str(reminder_date)
-            )
-        )
-
+            ''', (pet_name, reminder_type, str(reminder_date)))
         conn.commit()
-
         st.success("Reminder Added Successfully!")
 
-# VIEW REMINDERS
+# VIEW & DELETE REMINDERS
 elif choice == "View Reminders":
-
     st.subheader("All Reminders")
-    from datetime import date
+    
+    today = str(date.today())
+    
+    # Check for today's reminders
+    today_reminders = pd.read_sql_query("SELECT * FROM reminders WHERE reminder_date = ?", conn, params=(today,))
+    if not today_reminders.empty:
+        st.warning("⚠️ You have reminders for today!")
+        st.dataframe(today_reminders, use_container_width=True)
 
-today = str(date.today())
-
-today_reminders = pd.read_sql_query(
-    "SELECT * FROM reminders WHERE reminder_date = ?",
-    conn,
-    params=(today,)
-)
-
-if not today_reminders.empty:
-
-    st.warning("⚠️ You have reminders for today!")
-
-    st.dataframe(today_reminders)
-
-    reminders = pd.read_sql_query(
-        "SELECT * FROM reminders",
-        conn
-    )
+    # Fetch all reminders
+    reminders = pd.read_sql_query("SELECT * FROM reminders", conn)
 
     if reminders.empty:
         st.warning("No reminders added.")
-
     else:
-        st.dataframe(reminders)
+        st.write("### Upcoming & Past Reminders")
+        st.dataframe(reminders, use_container_width=True)
+        
+        st.write("---")
+        st.write("### 🗑️ Delete a Reminder")
+        
+        # Create a clean label format for the selectbox map: "ID: Pet Name (Type) - Date"
+        reminders['dropdown_label'] = reminders.apply(
+            lambda r: f"ID {r['id']}: {r['pet_name']} ({r['reminder_type']}) on {r['reminder_date']}", axis=1
+        )
+        
+        selected_reminder_label = st.selectbox("Select Reminder to Delete", reminders['dropdown_label'].tolist())
+        
+        # Extract the original database ID from the chosen string label
+        selected_id = int(selected_reminder_label.split(":")[0].replace("ID ", ""))
+        
+        if st.button("Delete Reminder"):
+            c.execute("DELETE FROM reminders WHERE id = ?", (selected_id,))
+            conn.commit()
+            st.success("Reminder Deleted Successfully!")
+            st.rerun()  # Refreshes the app state to instantly update the dataframes
