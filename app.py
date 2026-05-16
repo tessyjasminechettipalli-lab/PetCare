@@ -241,19 +241,29 @@ elif choice == "Search Pet":
                 if row['photo'] != "":
                     st.image(row['photo'], width=200)
 
-# DELETE PET
+# DELETE PET (UPDATED TO BE BUG-FREE)
 elif choice == "Delete Pet":
     st.subheader("Delete Pet")
-    pets = pd.read_sql_query("SELECT name FROM pets", conn)
-    pet_names = pets['name'].tolist()
+    pets = pd.read_sql_query("SELECT id, name, owner FROM pets", conn)
 
-    selected_pet = st.selectbox("Select Pet", pet_names)
+    if pets.empty:
+        st.warning("No pets available to delete.")
+    else:
+        # Create a unique label for each pet
+        pets['dropdown_label'] = pets.apply(lambda r: f"ID {r['id']}: {r['name']} (Owner: {r['owner']})", axis=1)
+        selected_pet_label = st.selectbox("Select Pet to Delete", pets['dropdown_label'].tolist())
+        
+        # Extract the ID
+        selected_id = int(selected_pet_label.split(":")[0].replace("ID ", ""))
 
-    if st.button("Delete"):
-        c.execute("DELETE FROM pets WHERE name = ?", (selected_pet,))
-        conn.commit()
-        st.success("Pet Deleted Successfully!")
-        st.rerun()
+        if st.button("Delete Pet"):
+            # Delete the pet
+            c.execute("DELETE FROM pets WHERE id = ?", (selected_id,))
+            # Also clean up their reminders automatically!
+            c.execute("DELETE FROM reminders WHERE pet_name = (SELECT name FROM pets WHERE id = ?)", (selected_id,))
+            conn.commit()
+            st.success("Pet Deleted Successfully!")
+            st.rerun()
 
 # ADD REMINDER
 elif choice == "Add Reminder":
